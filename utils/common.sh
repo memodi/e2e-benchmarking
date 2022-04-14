@@ -121,6 +121,7 @@ gen_spreadsheet() {
 #   end_date (epoch)
 ##############################################################################
 gen_metadata() {
+  set -x
   local BENCHMARK=$1
   local START_DATE=$2
   local END_DATE=$3
@@ -197,6 +198,7 @@ EOF
   # send the document to ES
   log "Indexing benchmark metadata to ${ES_SERVER}/${ES_INDEX}"
   curl -k -sS -X POST -H "Content-type: application/json" ${ES_SERVER}/${ES_INDEX}/_doc -d "${METADATA}" -o /dev/null
+  set +x
 }
 
 
