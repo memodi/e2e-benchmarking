@@ -14,14 +14,20 @@ else
   if [[ ${HYPERSHIFT} == "false" ]]; then
     export PROM_TOKEN=$(oc sa get-token -n openshift-monitoring prometheus-k8s || oc sa new-token -n openshift-monitoring prometheus-k8s)
   else
+    if [[ ${PROM_USER_WORKLOAD== "true"} ]]; then
+      export PROM_USER_WORKLOAD_SECRET=$(oc get secret -n openshift-user-workload-monitoring | grep prometheus-user-workload-token | head -n 1 | awk '{print $1 }')
+      export PROM_TOKEN=$(echo $(oc get secret $PROM_USER_WORKLOAD_SECRET -n openshift-user-workload-monitoring -o json | jq -r '.data.token') | base64 -d)
+    else
+      export PROM_TOKEN=$(oc -n openshift-monitoring sa get-token prometheus-k8s)
+    fi
     export PROM_TOKEN="dummytokenforthanos"
     export HOSTED_CLUSTER_NAME=$(oc get infrastructure cluster -o jsonpath='{.status.infrastructureName}')
   fi
 fi
 export TOLERATIONS="[{key: role, value: workload, effect: NoSchedule}]"
 export UUID=${UUID:-$(uuidgen)}
-export OPENSHIFT_VERSION=$(oc version -o json | jq -r '.openshiftVersion') 
-export NETWORK_TYPE=$(oc get network.config/cluster -o jsonpath='{.status.networkType}') 
+export OPENSHIFT_VERSION=$(oc version -o json | jq -r '.openshiftVersion')
+export NETWORK_TYPE=$(oc get network.config/cluster -o jsonpath='{.status.networkType}')
 
 platform=$(oc get infrastructure cluster -o jsonpath='{.status.platformStatus.type}')
 
@@ -39,7 +45,7 @@ if [[ ${HYPERSHIFT} == "true" ]]; then
     export CLUSTER_NAME=${HOSTED_CLUSTER_NAME}
     export PLATFORM=$(oc get infrastructure cluster -o jsonpath='{.status.platformStatus.type}')
     export DAG_ID=$(oc version -o json | jq -r '.openshiftVersion')-$(oc get infrastructure cluster -o jsonpath='{.status.infrastructureName}') # setting a dynamic value
-    envsubst < ./grafana-agent.yaml | oc apply -f -
+    envsubst <./grafana-agent.yaml | oc apply -f -
   fi
 fi
 
@@ -64,9 +70,9 @@ run_workload() {
     exit 1
   fi
   cp -pR $(dirname ${WORKLOAD_TEMPLATE})/* ${tmpdir}
-  envsubst < ${WORKLOAD_TEMPLATE} > ${tmpdir}/config.yml
+  envsubst <${WORKLOAD_TEMPLATE} >${tmpdir}/config.yml
   if [[ -n ${METRICS_PROFILE} ]]; then
-    envsubst < ${METRICS_PROFILE} > ${tmpdir}/metrics.yml || envsubst <  ${METRICS_PROFILE} > ${tmpdir}/metrics.yml
+    envsubst <${METRICS_PROFILE} >${tmpdir}/metrics.yml || envsubst <${METRICS_PROFILE} >${tmpdir}/metrics.yml
   fi
   if [[ -n ${ALERTS_PROFILE} ]]; then
     log "Alerting is enabled, fetching ${ALERTS_PROFILE}"
@@ -81,7 +87,7 @@ run_workload() {
   log "Deploying benchmark"
   set +e
   TMPCR=$(mktemp)
-  envsubst < $1 > ${TMPCR}
+  envsubst <$1 >${TMPCR}
   run_benchmark ${TMPCR} $((JOB_TIMEOUT + 600))
   rc=$?
 }
@@ -121,7 +127,7 @@ find_running_pods_num() {
 }
 
 check_running_benchmarks() {
-  benchmarks=$(oc get benchmark -n benchmark-operator | awk '{ if ($2 == "kube-burner")print}'| grep -vE "Failed|Complete" | wc -l)
+  benchmarks=$(oc get benchmark -n benchmark-operator | awk '{ if ($2 == "kube-burner")print}' | grep -vE "Failed|Complete" | wc -l)
   if [[ ${benchmarks} -gt 1 ]]; then
     log "Another kube-burner benchmark is running at the moment"
     oc get benchmark -n benchmark-operator
@@ -140,34 +146,34 @@ cleanup() {
 }
 
 get_pprof_secrets() {
- local certkey=`oc get secret -n openshift-etcd | grep "etcd-serving-ip" | head -1 | awk '{print $1}'`
- oc extract -n openshift-etcd secret/$certkey
- export CERTIFICATE=`base64 -w0 tls.crt`
- export PRIVATE_KEY=`base64 -w0 tls.key`
- export BEARER_TOKEN=$(oc sa get-token kube-burner -n benchmark-operator || oc sa new-token -n benchmark-operator kube-burner)
+  local certkey=$(oc get secret -n openshift-etcd | grep "etcd-serving-ip" | head -1 | awk '{print $1}')
+  oc extract -n openshift-etcd secret/$certkey
+  export CERTIFICATE=$(base64 -w0 tls.crt)
+  export PRIVATE_KEY=$(base64 -w0 tls.key)
+  export BEARER_TOKEN=$(oc sa get-token kube-burner -n benchmark-operator)
 }
 
 delete_pprof_secrets() {
- rm -f tls.key tls.crt
+  rm -f tls.key tls.crt
 }
 
 delete_oldpprof_folder() {
- rm -rf pprof-data
+  rm -rf pprof-data
 }
 
 get_network_type() {
-if [[ $NETWORK_TYPE == "OVNKubernetes" ]]; then
-  network_ns=openshift-ovn-kubernetes
-else
-  network_ns=openshift-sdn
-fi
+  if [[ $NETWORK_TYPE == "OVNKubernetes" ]]; then
+    network_ns=openshift-ovn-kubernetes
+  else
+    network_ns=openshift-sdn
+  fi
 }
 
 check_metric_to_modify() {
   export div_by=1
   echo $config | grep -i memory
-  if [[ $? == 0 ]]; then 
-   export div_by=1048576
+  if [[ $? == 0 ]]; then
+    export div_by=1048576
   fi
   echo $config | grep -i latency
   if [[ $? == 0 ]]; then
