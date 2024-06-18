@@ -56,7 +56,7 @@ run_benchmark_comparison() {
 
     # if CONFIG_LOC is not set, clone the benchmark comparison repo to be used be default
     if [[ -z $CONFIG_LOC ]]; then
-      git clone https://github.com/cloud-bulldozer/benchmark-comparison.git
+      git clone https://github.com/memodi/benchmark-comparison.git
     fi
     TOLERANCY_RULES_LIST=($TOLERANCY_RULES)
     COMPARISON_CONFIG_LIST=($COMPARISON_CONFIG)
@@ -131,7 +131,7 @@ install_touchstone() {
   touchstone_tmp=$(mktemp -d)
   python3 -m venv ${touchstone_tmp}
   source ${touchstone_tmp}/bin/activate
-  pip3 install -qq git+https://github.com/cloud-bulldozer/benchmark-comparison.git
+  pip3 install -qq git+https://github.com/memodi/benchmark-comparison.git
 }
 
 remove_touchstone() {
