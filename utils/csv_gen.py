@@ -15,6 +15,7 @@ def push_to_gsheet(sheetname, csv_file_name, google_svc_acc_key, email_id):
     sh = gc.create(sheetname)  # Specify name of the Spreadsheet
     sh.share(email_id, perm_type="user", role="writer")
     spreadsheet_id = sh.id
+    os.environ["SHEET_ID"]=spreadsheet_id
     spreadsheet_url = f"https://docs.google.com/spreadsheets/d/{sh.id}"
     if not os.path.exists(csv_file_name):
       print(f"CSV File doesn't exist {csv_file_name}")
